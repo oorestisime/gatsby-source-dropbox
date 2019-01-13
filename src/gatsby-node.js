@@ -65,13 +65,15 @@ async function processRemoteFile(
     if (!fileNodeID) {
       try {
         const url = await getTemporaryUrl(dbx, datum.path)
+        const ext = path.extname(datum.name)
         const fileNode = await createRemoteFileNode({
           url: url.link,
           store,
           cache,
           createNode,
           createNodeId,
-          ext: path.extname(datum.name),
+          ext,
+          name: path.basename(datum.name, ext),
         })
         if (fileNode) {
           fileNodeID = fileNode.id
@@ -95,27 +97,28 @@ exports.sourceNodes = async (
   const options = { ...defaultOptions, ...pluginOptions }
   const dbx = new Dropbox({ fetch, accessToken: options.accessToken })
   const files = await getFiles(dbx, options)
-  for (const file of files) {
-    const node = await processRemoteFile({
-      datum: {
-        id: file.id,
-        parent: `__SOURCE__`,
-        children: [],
-        internal: {
-          type: `DropboxNode`,
-          contentDigest: file.content_hash,
+  Promise.all(
+    files.map(async file => {
+      const node = await processRemoteFile({
+        datum: {
+          id: file.id,
+          parent: `__SOURCE__`,
+          children: [],
+          internal: {
+            type: `DropboxNode`,
+            contentDigest: file.content_hash,
+          },
+          name: file.name,
+          path: file.path_display,
+          lastModified: file.client_modified,
         },
-        name: file.name,
-        path: file.path_display,
-        lastModified: file.client_modified,
-      },
-      dbx,
-      createNode,
-      touchNode,
-      store,
-      cache,
-      createNodeId,
-    })
-    createNode(node)
-  };
+        dbx,
+        createNode,
+        touchNode,
+        store,
+        cache,
+        createNodeId,
+      })
+      createNode(node)
+    }))
 }
