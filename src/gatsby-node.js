@@ -24,7 +24,7 @@ async function listFiles(dbx, path, recursive) {
 }
 
 async function getTemporaryUrl(dbx, path) {
-  return dbx.filesGetTemporaryLink({ path })
+  return dbx.sharingGetSharedLinkFile({ path })
 }
 
 /**
@@ -64,10 +64,10 @@ async function processRemoteFile(
     }
     if (!fileNodeID) {
       try {
-        const url = await getTemporaryUrl(dbx, datum.path)
+        const { url } = await getTemporaryUrl(dbx, datum.path)
         const ext = path.extname(datum.name)
         const fileNode = await createRemoteFileNode({
-          url: url.link,
+          url,
           store,
           cache,
           createNode,
