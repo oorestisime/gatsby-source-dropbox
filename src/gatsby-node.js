@@ -24,7 +24,7 @@ async function listFiles(dbx, path, recursive) {
 }
 
 async function getTemporaryUrl(dbx, path) {
-  return dbx.sharingGetSharedLinkFile({ path })
+  return dbx.sharingCreateSharedLink({ path })
 }
 
 /**
