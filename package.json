@@ -1,7 +1,7 @@
 {
   "name": "gatsby-source-dropbox",
   "description": "Gatsby source plugin for creating nodes from dropbox API",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "author": "Orestis Ioannou <oorestisime@gmail.com>",
   "main": "index.js",
   "bugs": {
@@ -11,7 +11,7 @@
     "@babel/preset-env": "^7.0.0",
     "@babel/runtime": "^7.0.0",
     "dropbox": "^4.0.12",
-    "gatsby-source-filesystem": "^2.0.7",
+    "gatsby-source-filesystem": "^2.0.17",
     "node-fetch": "^2.2.0"
   },
   "devDependencies": {
