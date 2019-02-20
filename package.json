@@ -1,7 +1,7 @@
 {
   "name": "gatsby-source-dropbox",
   "description": "Gatsby source plugin for creating nodes from dropbox API",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "Orestis Ioannou <oorestisime@gmail.com>",
   "main": "index.js",
   "bugs": {
