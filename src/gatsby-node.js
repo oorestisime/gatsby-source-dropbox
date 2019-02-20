@@ -97,7 +97,7 @@ exports.sourceNodes = async (
   const options = { ...defaultOptions, ...pluginOptions }
   const dbx = new Dropbox({ fetch, accessToken: options.accessToken })
   const files = await getFiles(dbx, options)
-  Promise.all(
+  return Promise.all(
     files.map(async file => {
       const node = await processRemoteFile({
         datum: {
