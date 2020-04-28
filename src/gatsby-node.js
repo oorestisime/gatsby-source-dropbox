@@ -8,7 +8,7 @@ const defaultOptions = {
   path: ``,
   recursive: true,
   extensions: [`.jpg`, `.png`, `.md`],
-  createFolderNodes: true,
+  createFolderNodes: false,
 }
 
 const TYPE_MARKDOWN = `dropboxMarkdown`
