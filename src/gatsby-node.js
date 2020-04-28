@@ -60,8 +60,6 @@ async function processRemoteFile(
 ) {
 
   let fileNodeID
-
-  console.log("fuck: ", datum)
   if (datum.internal.type === TYPE_IMAGE || datum.internal.type === TYPE_MARKDOWN || datum.internal.type === TYPE_DEFAULT) {
     const remoteDataCacheKey = `dropbox-file-${datum.id}`
     const cacheRemoteData = await cache.get(remoteDataCacheKey)
@@ -138,6 +136,10 @@ function getParentFolderName(file) {
   return parentFolderName === "" ? `root` : parentFolderName
 }
 
+/**
+ * Main functions to linking nodes
+ */
+
 function getLinkedNodes(folderNodes, fileNodes) {
   const linkedNodes = folderNodes.map(folderDatum => {
     const { name } = folderDatum
@@ -163,7 +165,7 @@ function getLinkedNodes(folderNodes, fileNodes) {
 }
 
 /**
- * Main functions to create and link nodes
+ * Main functions to creating nodes
  */
 
 function createNodeData(data, options) {
@@ -209,6 +211,7 @@ function createNodeData(data, options) {
       }
     })
   
+    // We need an extra folder for the home directory of the dropbox app
     folderNodes.push({
       id: `dropboxRoot`,
       parent: `__SOURCE__`,
@@ -232,7 +235,6 @@ exports.sourceNodes = async (
   const options = { ...defaultOptions, ...pluginOptions }
   const dbx = new Dropbox({ fetch, accessToken: options.accessToken })
   const data = await getData(dbx, options)
-
   const nodeData = createNodeData(data, options)
 
   return Promise.all(
