@@ -8,7 +8,7 @@ const defaultOptions = {
   path: ``,
   recursive: true,
   extensions: [`.jpg`, `.png`, `.md`],
-  createFolderNodes: true,
+  createFolderNodes: false,
 }
 
 const TYPE_MARKDOWN = `dropboxMarkdown`
@@ -96,6 +96,10 @@ async function processRemoteFile(
   return datum
 }
 
+/**
+ * Helper functions for node creation
+ */
+
 function extractFiles(data, options){
   return data.entries.filter(entry => entry[`.tag`] === `file` && options.extensions.includes(path.extname(entry.name)))
 }
@@ -114,7 +118,13 @@ function getNodeType(file, options) {
       case `.md`:
         nodeType = TYPE_MARKDOWN
         break
-      case `.png` || `.jpg`:
+      case `.png`:
+        nodeType = TYPE_IMAGE
+        break
+      case `.jpg`:
+        nodeType = TYPE_IMAGE
+        break
+      case `.jpeg`:
         nodeType = TYPE_IMAGE
         break
       default:
@@ -126,27 +136,30 @@ function getNodeType(file, options) {
   return nodeType
 }
 
+/**
+ * Function to create linkable nodes
+ */
+
 function createNodeData(data, options) {
   const files = extractFiles(data, options)
 
   const fileNodes = files.map(file => {
-    const data = {
-      name: file.name,
-      dbxPath: file.path_display,
-      path: `root${file.path_display}`,
-      directory: path.dirname(`root${file.path_display}`),
-      lastModified: file.client_modified,
-    }
-
-    return {
+    const nodeDatum = {
       id: file.id,
       parent: `__SOURCE__`,
       children: [],
+      dbxPath: file.path_display,
+      path: `root${file.path_display}`,
+      directory: path.dirname(`root${file.path_display}`),
+      name: file.name,
+      lastModified: file.client_modified,
+    }
+    return {
+      ...nodeDatum,
       internal: {
         type: getNodeType(file, options),
-        contentDigest: JSON.stringify(data),
+        contentDigest: JSON.stringify(nodeDatum),
       },
-      ...data,
     }
   })
 
@@ -154,47 +167,48 @@ function createNodeData(data, options) {
     const folders = extractFolders(data)
   
     const folderNodes = folders.map(folder => {
-      const data = {
-        name: folder.name,
-        dbxPath: folder.path_display,
-        path: `root${folder.path_display}`,
-        directory: path.dirname(`root${folder.path_display}`),
-      }
-
-      return{
+      const nodeDatum = {
         id: folder.id,
         parent: `__SOURCE__`,
         children: [],
+        dbxPath: folder.path_display,
+        path: `root${folder.path_display}`,
+        name: folder.name,
+        directory: path.dirname(`root${folder.path_display}`),
+      }
+      return{
+        ...nodeDatum,
         internal: {
           type: TYPE_FOLDER,
-          contentDigest: JSON.stringify(data),
+          contentDigest: JSON.stringify(nodeDatum),
         },
-        ...data,
       }
     })
   
-    // We need an extra folder for the home directory of the dropbox app
-    folderNodes.push({
+    // Creating an extra node for the root folder
+    const rootDatum = {
       id: `dropboxRoot`,
       parent: `__SOURCE__`,
       children: [],
-      internal: {
-        type: TYPE_FOLDER,
-        contentDigest: JSON.stringify({ name: `root`, path: `root/`, folderPath: `root`,})
-      },
       name: `root`,
       path: `root/`,
       folderPath: `root`,
+    }
+    folderNodes.push({
+      ...rootDatum,
+      internal: {
+        type: TYPE_FOLDER,
+        contentDigest: JSON.stringify(rootDatum),
+      },
     })
 
     const nodes = [...fileNodes, ...folderNodes]
-
     return nodes
+
   } else {
     return fileNodes
   }
 }
-
 
 exports.sourceNodes = async (
   { actions: { createNode, touchNode }, store, cache, createNodeId },
@@ -217,18 +231,39 @@ exports.sourceNodes = async (
         createNodeId,
       })
       createNode(node)
-    }))
+    })
+  )
 }
 
+/**
+ * Schema definitions to link files to folders
+ */
 
-exports.createSchemaCustomization = ({ actions, schema }) => {
-  const { createTypes } = actions
-  const typeDefs = [
-    `type dropboxFolder implements Node {
-      dropboxImage: [dropboxImage] @link(from: "path", by: "directory")
-      dropboxMarkdown: [dropboxMarkdown] @link(from: "path", by: "directory")
-    }
-    `,
-  ]
-  createTypes(typeDefs)
+exports.createSchemaCustomization = ({ actions, schema }, pluginOptions) => {
+  const options = { ...defaultOptions, ...pluginOptions }
+
+  if(options.createFolderNodes) {
+    const { createTypes } = actions
+    const typeDefs = [
+      `type dropboxImage implements Node {
+        dbxPath: String,
+        path: String,
+        directory: String,
+        name: String,
+        lastModified: String,
+      }`,
+      `type dropboxMarkdown implements Node {
+        dbxPath: String,
+        path: String,
+        directory: String,
+        name: String,
+        lastModified: String,
+      }`,
+      `type dropboxFolder implements Node {
+        dropboxImage: [dropboxImage] @link(from: "path", by: "directory")
+        dropboxMarkdown: [dropboxMarkdown] @link(from: "path", by: "directory")
+      }`,
+    ]
+    createTypes(typeDefs)
+  }
 }
