@@ -8,7 +8,7 @@ const defaultOptions = {
   path: ``,
   recursive: true,
   extensions: [`.jpg`, `.png`, `.md`],
-  createFolderNodes: false,
+  createFolderNodes: true,
 }
 
 const TYPE_MARKDOWN = `dropboxMarkdown`
@@ -70,7 +70,7 @@ async function processRemoteFile(
     }
     if (!fileNodeID) {
       try {
-        const url = await getTemporaryUrl(dbx, datum.path)
+        const url = await getTemporaryUrl(dbx, datum.dbxPath)
         const ext = path.extname(datum.name)
         const fileNode = await createRemoteFileNode({
           url: url.link,
@@ -95,10 +95,6 @@ async function processRemoteFile(
   }
   return datum
 }
-
-/**
- * Helper functions to create and link nodes
- */
 
 function extractFiles(data, options){
   return data.entries.filter(entry => entry[`.tag`] === `file` && options.extensions.includes(path.extname(entry.name)))
@@ -130,51 +126,15 @@ function getNodeType(file, options) {
   return nodeType
 }
 
-function getParentFolderName(file) {
-  const { path } = file
-  const parentFolderName = path.substring(0, path.lastIndexOf(`/`)).replace(`/`,``)
-  return parentFolderName === "" ? `root` : parentFolderName
-}
-
-/**
- * Main functions to linking nodes
- */
-
-function getLinkedNodes(folderNodes, fileNodes) {
-  const linkedNodes = folderNodes.map(folderDatum => {
-    const { name } = folderDatum
-    
-    const relatedNodes = fileNodes.filter(file => getParentFolderName(file) === name)
-
-    const relatedImageNodes = relatedNodes.filter(node => node.internal.type === TYPE_IMAGE)
-    const relatedMarkdownNodes = relatedNodes.filter(node => node.internal.type === TYPE_MARKDOWN)
-    
-    const relatedImageNodeIds = relatedImageNodes.map(node => node.id)
-    const relatedMarkdownIds = relatedMarkdownNodes.map(node => node.id)
-
-    return {
-      ...folderDatum,
-      dropboxImage___NODE: relatedImageNodeIds,
-      dropboxMarkdown___NODE: relatedMarkdownIds,
-    }
-  })
-
-  linkedNodes.push(...fileNodes)
-
-  return linkedNodes
-}
-
-/**
- * Main functions to creating nodes
- */
-
 function createNodeData(data, options) {
   const files = extractFiles(data, options)
 
   const fileNodes = files.map(file => {
     const data = {
       name: file.name,
-      path: file.path_display,
+      dbxPath: file.path_display,
+      path: `root${file.path_display}`,
+      directory: path.dirname(`root${file.path_display}`),
       lastModified: file.client_modified,
     }
 
@@ -196,7 +156,9 @@ function createNodeData(data, options) {
     const folderNodes = folders.map(folder => {
       const data = {
         name: folder.name,
-        path: folder.path_display,
+        dbxPath: folder.path_display,
+        path: `root${folder.path_display}`,
+        directory: path.dirname(`root${folder.path_display}`),
       }
 
       return{
@@ -218,15 +180,21 @@ function createNodeData(data, options) {
       children: [],
       internal: {
         type: TYPE_FOLDER,
-        contentDigest: JSON.stringify({ name: `root` }),
+        contentDigest: JSON.stringify({ name: `root`, path: `root/`, folderPath: `root`,})
       },
+      name: `root`,
+      path: `root/`,
+      folderPath: `root`,
     })
 
-    return getLinkedNodes(folderNodes, fileNodes)
+    const nodes = [...fileNodes, ...folderNodes]
+
+    return nodes
   } else {
     return fileNodes
   }
 }
+
 
 exports.sourceNodes = async (
   { actions: { createNode, touchNode }, store, cache, createNodeId },
@@ -250,4 +218,17 @@ exports.sourceNodes = async (
       })
       createNode(node)
     }))
+}
+
+
+exports.createSchemaCustomization = ({ actions, schema }) => {
+  const { createTypes } = actions
+  const typeDefs = [
+    `type dropboxFolder implements Node {
+      dropboxImage: [dropboxImage] @link(from: "path", by: "directory")
+      dropboxMarkdown: [dropboxMarkdown] @link(from: "path", by: "directory")
+    }
+    `,
+  ]
+  createTypes(typeDefs)
 }
