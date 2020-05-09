@@ -20,6 +20,7 @@ plugins: [
       extensions: ['.pdf', '.jpg', '.png', '.md'],
       path: '/path/to/folder',
       recursive: false,
+      createFolderNodes: false,
     },
   },
 ]
@@ -31,8 +32,10 @@ plugins: [
 * **extensions:** list of extensions used to filter out results
 * **path:** the folder to use to retrieve data. Defaults to '' which is the root of the dropbox project.
 * **recursive:** use this to retrieve files from subdirectories as well
+* **createFolderNodes** use this if you want see your nodes structured by the folders they where in
 
 ## How to query
+### With `createFolderNodes: false`
 
 The plugin provides some basic information of the remote files such as:
 
@@ -63,3 +66,60 @@ query {
   }
 }
 ```
+
+### With `createFolderNodes: true`
+
+By setting this to true, you will get the following types in graphql:
+
+```graphql
+allDropboxFolder
+allDropboxImage
+allDropboxMarkdown
+allDropboxNode // everything that's not one of the above, will be of this type
+```
+
+You can now easily query for files within a folder. Lets say you have a simple portfolio structured like this on your dropbox:
+
+```markdown
+.
++-- Project-01-Lorem-Name
+|   +-- Description.md
+|   +-- Gallery-Image-01.jpg
+|   +-- Gallery-Image-02.jpg
++-- Project-02-Ipsum-Name
+|   +--Description.md
+|   +--Gallery-Image-01.jpg
+|   +--Gallery-Image-02.jpg
+```
+
+You can now query like following in `gatsby-node.js` and create project pages with a corresponding template:
+
+```graphql
+query MyQuery {
+  allDropboxFolder(filter: {name: {regex: "/Project/"}}) {
+    group(field: name) {
+      nodes {
+        name
+        dropboxImage {
+          localFile {
+            childImageSharp {
+              fluid {
+                src
+              }
+            }
+          }
+        }
+        dropboxMarkdown {
+          localFile {
+            childMarkdownRemark {
+              html
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+

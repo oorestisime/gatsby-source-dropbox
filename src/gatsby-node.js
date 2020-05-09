@@ -7,14 +7,16 @@ const { createRemoteFileNode } = require(`gatsby-source-filesystem`)
 const defaultOptions = {
   path: ``,
   recursive: true,
-  extensions: [`.jpg`, `.png`, `.md`],
   createFolderNodes: false,
+  extensions: [`.jpg`, `.png`, `.md`],
 }
 
-const TYPE_MARKDOWN = `dropboxMarkdown`
-const TYPE_IMAGE = `dropboxImage`
-const TYPE_FOLDER = `dropboxFolder`
-const TYPE_DEFAULT = `dropboxNode`
+const NODE_TYPES = {
+  MARKDOWN: `dropboxMarkdown`,
+  IMAGE: `dropboxImage`,
+  FOLDER: `dropboxFolder`,
+  DEFAULT: `dropboxNode`,
+}
 
 /**
  * Dropbox API calls
@@ -33,7 +35,7 @@ async function getTemporaryUrl(dbx, path) {
 }
 
 /**
- * Get the folder id from a path and then retrive and filter files
+ * Get the folder id from a path and then retrieve and filter files
  */
 
 async function getData(dbx, options) {
@@ -58,9 +60,10 @@ async function getData(dbx, options) {
 async function processRemoteFile(
   { dbx, datum, cache, store, createNode, touchNode, createNodeId }
 ) {
-
   let fileNodeID
-  if (datum.internal.type === TYPE_IMAGE || datum.internal.type === TYPE_MARKDOWN || datum.internal.type === TYPE_DEFAULT) {
+  const isDbxRemoteNode = Object.values(NODE_TYPES).some(entry => entry === datum.internal.type) && datum.internal.type !== NODE_TYPES.FOLDER
+  
+  if (isDbxRemoteNode) {
     const remoteDataCacheKey = `dropbox-file-${datum.id}`
     const cacheRemoteData = await cache.get(remoteDataCacheKey)
 
@@ -109,26 +112,26 @@ function extractFolders(data){
 }
 
 function getNodeType(file, options) {
-  let nodeType = TYPE_DEFAULT
+  let nodeType = NODE_TYPES.DEFAULT
 
   if(options.createFolderNodes) {
     const extension = path.extname(file.path_display)
 
     switch(extension) {
       case `.md`:
-        nodeType = TYPE_MARKDOWN
+        nodeType = NODE_TYPES.MARKDOWN
         break
       case `.png`:
-        nodeType = TYPE_IMAGE
+        nodeType = NODE_TYPES.IMAGE
         break
       case `.jpg`:
-        nodeType = TYPE_IMAGE
+        nodeType = NODE_TYPES.IMAGE
         break
       case `.jpeg`:
-        nodeType = TYPE_IMAGE
+        nodeType = NODE_TYPES.IMAGE
         break
       default:
-        nodeType = TYPE_DEFAULT
+        nodeType = NODE_TYPES.DEFAULT
         break
     }
   }
@@ -179,7 +182,7 @@ function createNodeData(data, options) {
       return{
         ...nodeDatum,
         internal: {
-          type: TYPE_FOLDER,
+          type: NODE_TYPES.FOLDER,
           contentDigest: JSON.stringify(nodeDatum),
         },
       }
@@ -197,7 +200,7 @@ function createNodeData(data, options) {
     folderNodes.push({
       ...rootDatum,
       internal: {
-        type: TYPE_FOLDER,
+        type: NODE_TYPES.FOLDER,
         contentDigest: JSON.stringify(rootDatum),
       },
     })
@@ -239,7 +242,7 @@ exports.sourceNodes = async (
  * Schema definitions to link files to folders
  */
 
-exports.createSchemaCustomization = ({ actions, schema }, pluginOptions) => {
+exports.createSchemaCustomization = ({ actions }, pluginOptions) => {
   const options = { ...defaultOptions, ...pluginOptions }
 
   if(options.createFolderNodes) {
