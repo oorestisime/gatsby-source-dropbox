@@ -7,9 +7,16 @@ const { createRemoteFileNode } = require(`gatsby-source-filesystem`)
 const defaultOptions = {
   path: ``,
   recursive: true,
+  createFolderNodes: false,
   extensions: [`.jpg`, `.png`, `.md`],
 }
 
+const NODE_TYPES = {
+  MARKDOWN: `dropboxMarkdown`,
+  IMAGE: `dropboxImage`,
+  FOLDER: `dropboxFolder`,
+  DEFAULT: `dropboxNode`,
+}
 
 /**
  * Dropbox API calls
@@ -28,10 +35,10 @@ async function getTemporaryUrl(dbx, path) {
 }
 
 /**
- * Get the folder id from a path and then retrive and filter files
+ * Get the folder id from a path and then retrieve and filter files
  */
 
-async function getFiles(dbx, options) {
+async function getData(dbx, options) {
   let folderId = ``
   try {
     if (options.path !== ``) {
@@ -39,7 +46,7 @@ async function getFiles(dbx, options) {
       folderId = folder.id
     }
     const files = await listFiles(dbx, folderId, options.recursive)
-    return files.entries.filter(entry => entry[`.tag`] === `file` && options.extensions.includes(path.extname(entry.name)))
+    return files
   } catch (e) {
     console.warn(e.error)
     return []
@@ -54,7 +61,9 @@ async function processRemoteFile(
   { dbx, datum, cache, store, createNode, touchNode, createNodeId }
 ) {
   let fileNodeID
-  if (datum.internal.type === `DropboxNode`) {
+  const isDbxRemoteNode = Object.values(NODE_TYPES).some(entry => entry === datum.internal.type) && datum.internal.type !== NODE_TYPES.FOLDER
+  
+  if (isDbxRemoteNode) {
     const remoteDataCacheKey = `dropbox-file-${datum.id}`
     const cacheRemoteData = await cache.get(remoteDataCacheKey)
 
@@ -64,7 +73,7 @@ async function processRemoteFile(
     }
     if (!fileNodeID) {
       try {
-        const url = await getTemporaryUrl(dbx, datum.path)
+        const url = await getTemporaryUrl(dbx, datum.dbxPath)
         const ext = path.extname(datum.name)
         const fileNode = await createRemoteFileNode({
           url: url.link,
@@ -90,28 +99,133 @@ async function processRemoteFile(
   return datum
 }
 
+/**
+ * Helper functions for node creation
+ */
+
+function extractFiles(data, options){
+  return data.entries.filter(entry => entry[`.tag`] === `file` && options.extensions.includes(path.extname(entry.name)))
+}
+
+function extractFolders(data){
+ return data.entries.filter(entry => entry[`.tag`] === `folder`)
+}
+
+function getNodeType(file, options) {
+  let nodeType = NODE_TYPES.DEFAULT
+
+  if(options.createFolderNodes) {
+    const extension = path.extname(file.path_display)
+
+    switch(extension) {
+      case `.md`:
+        nodeType = NODE_TYPES.MARKDOWN
+        break
+      case `.png`:
+        nodeType = NODE_TYPES.IMAGE
+        break
+      case `.jpg`:
+        nodeType = NODE_TYPES.IMAGE
+        break
+      case `.jpeg`:
+        nodeType = NODE_TYPES.IMAGE
+        break
+      default:
+        nodeType = NODE_TYPES.DEFAULT
+        break
+    }
+  }
+
+  return nodeType
+}
+
+/**
+ * Function to create linkable nodes
+ */
+
+function createNodeData(data, options) {
+  const files = extractFiles(data, options)
+
+  const fileNodes = files.map(file => {
+    const nodeDatum = {
+      id: file.id,
+      parent: `__SOURCE__`,
+      children: [],
+      dbxPath: file.path_display,
+      path: `root${file.path_display}`,
+      directory: path.dirname(`root${file.path_display}`),
+      name: file.name,
+      lastModified: file.client_modified,
+    }
+    return {
+      ...nodeDatum,
+      internal: {
+        type: getNodeType(file, options),
+        contentDigest: JSON.stringify(nodeDatum),
+      },
+    }
+  })
+
+  if(options.createFolderNodes) {
+    const folders = extractFolders(data)
+  
+    const folderNodes = folders.map(folder => {
+      const nodeDatum = {
+        id: folder.id,
+        parent: `__SOURCE__`,
+        children: [],
+        dbxPath: folder.path_display,
+        path: `root${folder.path_display}`,
+        name: folder.name,
+        directory: path.dirname(`root${folder.path_display}`),
+      }
+      return{
+        ...nodeDatum,
+        internal: {
+          type: NODE_TYPES.FOLDER,
+          contentDigest: JSON.stringify(nodeDatum),
+        },
+      }
+    })
+  
+    // Creating an extra node for the root folder
+    const rootDatum = {
+      id: `dropboxRoot`,
+      parent: `__SOURCE__`,
+      children: [],
+      name: `root`,
+      path: `root/`,
+      folderPath: `root`,
+    }
+    folderNodes.push({
+      ...rootDatum,
+      internal: {
+        type: NODE_TYPES.FOLDER,
+        contentDigest: JSON.stringify(rootDatum),
+      },
+    })
+
+    const nodes = [...fileNodes, ...folderNodes]
+    return nodes
+
+  } else {
+    return fileNodes
+  }
+}
+
 exports.sourceNodes = async (
   { actions: { createNode, touchNode }, store, cache, createNodeId },
   pluginOptions,
   ) => {
   const options = { ...defaultOptions, ...pluginOptions }
   const dbx = new Dropbox({ fetch, accessToken: options.accessToken })
-  const files = await getFiles(dbx, options)
+  const data = await getData(dbx, options)
+  const nodeData = createNodeData(data, options)
+
   return Promise.all(
-    files.map(async file => {
+    nodeData.map(async nodeDatum => {
       const node = await processRemoteFile({
-        datum: {
-          id: file.id,
-          parent: `__SOURCE__`,
-          children: [],
-          internal: {
-            type: `DropboxNode`,
-            contentDigest: file.content_hash,
-          },
-          name: file.name,
-          path: file.path_display,
-          lastModified: file.client_modified,
-        },
+        datum: nodeDatum ,
         dbx,
         createNode,
         touchNode,
@@ -120,5 +234,39 @@ exports.sourceNodes = async (
         createNodeId,
       })
       createNode(node)
-    }))
+    })
+  )
+}
+
+/**
+ * Schema definitions to link files to folders
+ */
+
+exports.createSchemaCustomization = ({ actions }, pluginOptions) => {
+  const options = { ...defaultOptions, ...pluginOptions }
+
+  if(options.createFolderNodes) {
+    const { createTypes } = actions
+    const typeDefs = [
+      `type dropboxImage implements Node {
+        dbxPath: String,
+        path: String,
+        directory: String,
+        name: String,
+        lastModified: String,
+      }`,
+      `type dropboxMarkdown implements Node {
+        dbxPath: String,
+        path: String,
+        directory: String,
+        name: String,
+        lastModified: String,
+      }`,
+      `type dropboxFolder implements Node {
+        dropboxImage: [dropboxImage] @link(from: "path", by: "directory")
+        dropboxMarkdown: [dropboxMarkdown] @link(from: "path", by: "directory")
+      }`,
+    ]
+    createTypes(typeDefs)
+  }
 }
