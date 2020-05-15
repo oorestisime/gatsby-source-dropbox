@@ -75,7 +75,7 @@ By setting this to true, you will get the following types in graphql:
 allDropboxFolder
 allDropboxImage
 allDropboxMarkdown
-allDropboxNode // everything that's not one of the above, will be of this type
+allDropboxNode # everything that's not one of the above, will be of this type
 ```
 
 You can now easily query for files within a folder. Lets say you have a simple portfolio structured like this on your dropbox:
