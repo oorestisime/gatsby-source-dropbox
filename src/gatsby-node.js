@@ -83,6 +83,7 @@ async function processRemoteFile(
           createNodeId,
           ext,
           name: path.basename(datum.name, ext),
+          parentNodeId: datum.id,
         })
         if (fileNode) {
           fileNodeID = fileNode.id
