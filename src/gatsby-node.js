@@ -143,7 +143,7 @@ function getNodeType(file, options) {
  * Function to create linkable nodes
  */
 
-function createNodeData(data, options) {
+function createNodeData(data, options, createContentDigest) {
   const files = extractFiles(data, options)
 
   const fileNodes = files.map(file => {
@@ -161,7 +161,7 @@ function createNodeData(data, options) {
       ...nodeDatum,
       internal: {
         type: getNodeType(file, options),
-        contentDigest: JSON.stringify(nodeDatum),
+        contentDigest: createContentDigest(nodeDatum),
       },
     }
   })
@@ -183,7 +183,7 @@ function createNodeData(data, options) {
         ...nodeDatum,
         internal: {
           type: NODE_TYPES.FOLDER,
-          contentDigest: JSON.stringify(nodeDatum),
+          contentDigest: createContentDigest(nodeDatum),
         },
       }
     })
@@ -201,7 +201,7 @@ function createNodeData(data, options) {
       ...rootDatum,
       internal: {
         type: NODE_TYPES.FOLDER,
-        contentDigest: JSON.stringify(rootDatum),
+        contentDigest: createContentDigest(rootDatum),
       },
     })
 
@@ -214,13 +214,13 @@ function createNodeData(data, options) {
 }
 
 exports.sourceNodes = async (
-  { actions: { createNode, touchNode }, store, cache, createNodeId },
+  { actions: { createNode, touchNode }, store, cache, createNodeId, createContentDigest },
   pluginOptions,
   ) => {
   const options = { ...defaultOptions, ...pluginOptions }
   const dbx = new Dropbox({ fetch, accessToken: options.accessToken })
   const data = await getData(dbx, options)
-  const nodeData = createNodeData(data, options)
+  const nodeData = createNodeData(data, options, createContentDigest)
 
   return Promise.all(
     nodeData.map(async nodeDatum => {
