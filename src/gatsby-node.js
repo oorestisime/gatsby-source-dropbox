@@ -56,7 +56,6 @@ async function getData(dbx, options) {
 /**
  * Use filesystem to create remote file
  */
-
 async function processRemoteFile(
   { dbx, datum, cache, store, createNode, touchNode, createNodeId }
 ) {
@@ -64,14 +63,22 @@ async function processRemoteFile(
   const isDbxRemoteNode = Object.values(NODE_TYPES).some(entry => entry === datum.internal.type) && datum.internal.type !== NODE_TYPES.FOLDER
   
   if (isDbxRemoteNode) {
+    let isUpToDate
     const remoteDataCacheKey = `dropbox-file-${datum.id}`
     const cacheRemoteData = await cache.get(remoteDataCacheKey)
 
     if (cacheRemoteData) {
+      isUpToDate = cacheRemoteData.contentDigest === datum.internal.contentDigest && true
       fileNodeID = cacheRemoteData.fileNodeID
-      touchNode({ nodeId: cacheRemoteData.fileNodeID })
+      
+      if(isUpToDate) {
+        touchNode({ nodeId: cacheRemoteData.fileNodeID, contentDigest: datum.internal.contentDigest })
+      }
     }
-    if (!fileNodeID) {
+
+    const sourceRemoteFile = !fileNodeID || !isUpToDate && true
+
+    if (sourceRemoteFile) {
       try {
         const url = await getTemporaryUrl(dbx, datum.dbxPath)
         const ext = path.extname(datum.name)
@@ -86,7 +93,7 @@ async function processRemoteFile(
         })
         if (fileNode) {
           fileNodeID = fileNode.id
-          await cache.set(remoteDataCacheKey, { fileNodeID })
+          await cache.set(remoteDataCacheKey, { fileNodeID, contentDigest: datum.internal.contentDigest })
         }
       } catch (e) {
         console.log(`Error creating remote file`, e)
