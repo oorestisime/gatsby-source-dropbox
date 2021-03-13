@@ -1,6 +1,8 @@
 # gatsby-source-dropbox [![npm version](https://badge.fury.io/js/gatsby-source-dropbox.svg)](https://badge.fury.io/js/gatsby-source-dropbox)
 
-Source plugin for getting data from Dropbox account.
+Source plugin for getting data from Dropbox account. 
+
+If you want to work with Markdown files that include images, you also need to install [gatsby-remark-dropbox-images](https://www.npmjs.com/package/gatsby-remark-dropbox-images)
 
 ## Install
 
